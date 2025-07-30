@@ -23,15 +23,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const adminModal = document.getElementById('admin-login-modal');
     const pinInputs = document.querySelectorAll('#pin-inputs input');
     const pinError = document.getElementById('pin-error');
+    const adminBtn = document.getElementById('admin-btn');
     const countdownElement = document.getElementById('countdown');
     const raffleDateInput = document.getElementById('raffle-date');
     const couponValueInput = document.getElementById('coupon-value');
+    const ocupacionRadios = document.querySelectorAll('input[name="ocupacion"]');
+    const otraOcupacionInput = document.getElementById('ocupacion-otra-input');
 
     // --- LÓGICA DEL DASHBOARD ---
     const renderDashboard = () => {
         const responses = JSON.parse(localStorage.getItem(RESPONSES_KEY)) || [];
-        
-        // Renderizar Métricas
         document.getElementById('metric-total').innerText = responses.length;
         const calcPercentage = (filterFn) => {
             if (responses.length === 0) return '0%';
@@ -41,24 +42,23 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('metric-asesoria').innerText = calcPercentage(r => r['asesoria-previa'] === 'no-encantaria');
         document.getElementById('metric-precio').innerText = calcPercentage(r => r.precio === '>60');
         document.getElementById('metric-piloto').innerText = calcPercentage(r => r['participar-piloto'] === 'si');
-
-        // Renderizar Gráficos
         renderAgeChart(responses);
         renderSeguridadChart(responses);
         renderValoresChart(responses);
+        renderMarcasChart(responses);
     };
 
     const renderChart = (chartId, type, data, options) => {
         if (chartInstances[chartId]) chartInstances[chartId].destroy();
-        const ctx = document.getElementById(chartId).getContext('2d');
-        chartInstances[chartId] = new Chart(ctx, { type, data, options });
+        const ctx = document.getElementById(chartId)?.getContext('2d');
+        if (ctx) chartInstances[chartId] = new Chart(ctx, { type, data, options });
     };
 
     const renderAgeChart = (responses) => {
-        const ageCounts = responses.reduce((acc, r) => { acc[r.edad] = (acc[r.edad] || 0) + 1; return acc; }, {});
+        const counts = responses.reduce((acc, r) => { acc[r.edad] = (acc[r.edad] || 0) + 1; return acc; }, {});
         renderChart('age-chart', 'doughnut', {
-            labels: Object.keys(ageCounts),
-            datasets: [{ data: Object.values(ageCounts), backgroundColor: ['#ec4899', '#be185d', '#a21caf', '#7c3aed', '#5b21b6'], hoverOffset: 4 }]
+            labels: Object.keys(counts),
+            datasets: [{ data: Object.values(counts), backgroundColor: ['#ec4899', '#be185d', '#a21caf', '#7c3aed', '#5b21b6'], hoverOffset: 4 }]
         }, { responsive: true, plugins: { legend: { position: 'bottom' } } });
     };
     
@@ -80,6 +80,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }, { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } });
     };
 
+    const renderMarcasChart = (responses) => {
+        const labels = { 'nacional': 'Nacionales', 'importada': 'Importadas' };
+        const counts = responses.reduce((acc, r) => { const label = labels[r.marcas] || 'No responde'; acc[label] = (acc[label] || 0) + 1; return acc; }, {});
+        renderChart('marcas-chart', 'doughnut', {
+            labels: Object.keys(counts),
+            datasets: [{ data: Object.values(counts), backgroundColor: ['#ec4899', '#7c3aed'], hoverOffset: 4 }]
+        }, { responsive: true, plugins: { legend: { position: 'bottom' } } });
+    };
+
     // --- LÓGICA DE NAVEGACIÓN Y FORMULARIO ---
     const showStep = (step) => {
         surveySections.forEach(section => section.classList.add('hidden'));
@@ -91,6 +100,19 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.style.width = `${progress}%`;
         progressText.innerText = `${progress}%`;
     };
+
+    ocupacionRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            if (radio.value === 'otra' && radio.checked) {
+                otraOcupacionInput.classList.remove('hidden');
+                otraOcupacionInput.required = true;
+            } else {
+                otraOcupacionInput.classList.add('hidden');
+                otraOcupacionInput.required = false;
+            }
+        });
+    });
+
     nextButtons.forEach(button => button.addEventListener('click', () => { if (currentStep < totalSteps) { currentStep++; showStep(currentStep); window.scrollTo(0, 0); }}));
     prevButtons.forEach(button => button.addEventListener('click', () => { if (currentStep > 1) { currentStep--; showStep(currentStep); window.scrollTo(0, 0); }}));
     showStep(currentStep);
@@ -135,27 +157,40 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- LÓGICA DE ADMIN Y ACCIONES RÁPIDAS ---
     window.verifyAdminPin = () => {
         if (Array.from(pinInputs).map(i => i.value).join('') === ADMIN_PIN) {
+            adminBtn.classList.add('hidden');
             surveyView.classList.add('hidden'); successView.classList.add('hidden'); dashboardView.classList.remove('hidden');
             renderDashboard(); closeAdminLogin(); window.scrollTo(0, 0);
+            pinInputs.forEach(input => input.value = '');
         } else {
             pinError.classList.remove('hidden'); pinInputs.forEach(input => input.value = ''); pinInputs[0].focus();
         }
     };
-    window.clearData = () => { if (confirm('¿Estás seguro de que quieres borrar TODAS las respuestas?')) { localStorage.removeItem(RESPONSES_KEY); renderDashboard(); alert('Datos eliminados.'); }};
+    window.clearData = () => { if (confirm('¿Estás seguro de que quieres borrar TODAS las respuestas? Esta acción no se puede deshacer.')) { localStorage.removeItem(RESPONSES_KEY); renderDashboard(); alert('Datos eliminados.'); }};
     window.updateDashboard = () => renderDashboard();
     window.exportData = () => {
-        const data = localStorage.getItem(RESPONSES_KEY);
-        const blob = new Blob([data || "[]"], {type: "application/json"});
+        const responses = JSON.parse(localStorage.getItem(RESPONSES_KEY)) || [];
+        if (responses.length === 0) { alert("No hay datos para exportar."); return; }
+        const headers = Object.keys(responses[0]);
+        let csvContent = headers.join(',') + '\n';
+        responses.forEach(response => {
+            const row = headers.map(header => {
+                let cell = response[header] === null || response[header] === undefined ? '' : response[header];
+                if (Array.isArray(cell)) cell = cell.join('; ');
+                return `"${String(cell).replace(/"/g, '""')}"`;
+            }).join(',');
+            csvContent += row + '\n';
+        });
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'coqueta_responses.json';
+        a.download = 'coqueta_responses.csv';
         a.click();
         URL.revokeObjectURL(url);
     };
     window.sendReport = () => alert('Función no implementada. Esto simula el envío de un reporte por email.');
     window.showAdminLogin = () => adminModal.classList.remove('hidden');
     window.closeAdminLogin = () => adminModal.classList.add('hidden');
-    window.exitDashboard = () => { dashboardView.classList.add('hidden'); surveyView.classList.remove('hidden'); };
+    window.exitDashboard = () => { dashboardView.classList.add('hidden'); surveyView.classList.remove('hidden'); adminBtn.classList.remove('hidden'); };
     window.resetSurvey = () => { form.reset(); currentStep = 1; showStep(1); successView.classList.add('hidden'); surveyView.classList.remove('hidden'); clearInterval(countdownInterval); };
 });

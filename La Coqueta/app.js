@@ -2,7 +2,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- CONSTANTES Y VARIABLES GLOBALES ---
     const ADMIN_PIN = "1234";
     const MAX_VALORES_CHECKBOXES = 3;
+    const RESPONSES_KEY = 'coqueta_responses';
+    const RAFFLE_CONFIG_KEY = 'coqueta_raffle_config';
     let currentStep = 1;
+    let countdownInterval;
 
     // Vistas principales y secciones
     const surveyView = document.getElementById('survey-view');
@@ -28,16 +31,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const surveyHearts = document.getElementById('survey-hearts');
     const dashboardIcons = document.getElementById('dashboard-icons');
 
-    // --- LÓGICA DE NAVEGACIÓN MULTISTEP ---
+    // Elemento del conteo
+    const countdownElement = document.getElementById('countdown');
 
+    // --- LÓGICA DE NAVEGACIÓN MULTISTEP ---
     const showStep = (step) => {
-        surveySections.forEach(section => {
-            section.classList.add('hidden');
-        });
-        const activeSection = document.querySelector(`.survey-section[data-step="${step}"]`);
-        if (activeSection) {
-            activeSection.classList.remove('hidden');
-        }
+        surveySections.forEach(section => section.classList.add('hidden'));
+        document.querySelector(`.survey-section[data-step="${step}"]`)?.classList.remove('hidden');
         updateProgressBar();
     };
 
@@ -67,11 +67,78 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     
-    // Inicializar la primera vista
     showStep(currentStep);
 
-    // --- LÓGICA DE LA ENCUESTA ---
+    // --- PERSISTENCIA DE DATOS ---
 
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(form);
+        const response = {
+            id: `resp_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+        };
+
+        // Procesar checkboxes que pueden tener múltiples valores
+        response.estilo = formData.getAll('estilo');
+        response.valores = formData.getAll('valores');
+
+        // Procesar el resto de los campos
+        for (let [key, value] of formData.entries()) {
+            if (key !== 'estilo' && key !== 'valores') {
+                response[key] = value;
+            }
+        }
+
+        // Guardar en localStorage
+        const allResponses = JSON.parse(localStorage.getItem(RESPONSES_KEY)) || [];
+        allResponses.push(response);
+        localStorage.setItem(RESPONSES_KEY, JSON.stringify(allResponses));
+
+        console.log("Respuesta guardada:", response);
+        
+        // Cambiar de vista y activar conteo
+        surveyView.classList.add('hidden');
+        successView.classList.remove('hidden');
+        startCountdown();
+        window.scrollTo(0, 0);
+    });
+    
+    // --- LÓGICA DEL SORTEO Y CONTEO ---
+    
+    const startCountdown = () => {
+        clearInterval(countdownInterval); // Limpiar cualquier conteo anterior
+
+        const raffleConfig = JSON.parse(localStorage.getItem(RAFFLE_CONFIG_KEY)) || {};
+        const raffleDate = raffleConfig.date ? new Date(raffleConfig.date) : new Date(new Date().getTime() + 10 * 24 * 60 * 60 * 1000); // Por defecto: 10 días desde ahora
+
+        if (!raffleConfig.date) {
+            // Guardar la fecha por defecto si no existe
+             localStorage.setItem(RAFFLE_CONFIG_KEY, JSON.stringify({ ...raffleConfig, date: raffleDate.toISOString() }));
+        }
+
+        countdownInterval = setInterval(() => {
+            const now = new Date().getTime();
+            const distance = raffleDate - now;
+
+            if (distance < 0) {
+                clearInterval(countdownInterval);
+                countdownElement.innerHTML = "¡El sorteo ha finalizado!";
+                return;
+            }
+
+            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+            countdownElement.innerHTML = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+        }, 1000);
+    };
+
+    // --- LÓGICA RESTANTE (SIN CAMBIOS IMPORTANTES) ---
+    
     valoresCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', () => {
             const checkedCount = document.querySelectorAll('input[name="valores"]:checked').length;
@@ -91,26 +158,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        // Lógica futura para guardar datos...
-        console.log("Formulario enviado. Guardando datos...");
-        
-        surveyView.classList.add('hidden');
-        successView.classList.remove('hidden');
-        window.scrollTo(0, 0);
-    });
-
-    // --- LÓGICA DEL ADMIN ---
-    
     pinInputs.forEach((input, index) => {
         input.addEventListener('keyup', (e) => {
-            if (e.key >= 0 && e.key <= 9 && index < pinInputs.length - 1) {
-                pinInputs[index + 1].focus();
-            }
-            if (e.key === "Backspace" && index > 0) {
-                pinInputs[index - 1].focus();
-            }
+            if (e.key >= 0 && e.key <= 9 && index < pinInputs.length - 1) pinInputs[index + 1].focus();
+            if (e.key === "Backspace" && index > 0) pinInputs[index - 1].focus();
         });
     });
 
@@ -135,9 +186,9 @@ document.addEventListener('DOMContentLoaded', () => {
             dashboardIcons.classList.remove('hidden');
             closeAdminLogin();
             window.scrollTo(0, 0);
-             // Lógica futura para cargar el dashboard...
+            // En el futuro, aquí llamaremos a la función que carga el dashboard
         } else {
-            pinError.classList.remove('hidden');
+            pinError.classList.add('hidden');
             pinInputs.forEach(input => input.value = '');
             pinInputs[0].focus();
         }
@@ -157,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
         form.reset();
         currentStep = 1;
         showStep(currentStep);
+        clearInterval(countdownInterval);
         valoresCheckboxes.forEach(cb => {
             cb.disabled = false;
             cb.closest('label').classList.remove('opacity-50', 'cursor-not-allowed');

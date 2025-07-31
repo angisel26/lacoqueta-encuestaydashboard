@@ -3,11 +3,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const SUPABASE_URL = 'https://iijnuxziaftelvowmorg.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlpam51eHppYWZ0ZWx2b3dtb3JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5MDk2OTAsImV4cCI6MjA2OTQ4NTY5MH0.vlnPdApENWEx2-ayNTtGpEqu7DcPS6_VYHOK--cVi0o';
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
     const EMAILJS_SERVICE_ID = 'service_sqsuzmb';
     const EMAILJS_TEMPLATE_ID = 'template_100rn4i';
+    const EMAILJS_PUBLIC_KEY = 'uhY_-nt1o5IjmpeVn';
 
     // --- CONSTANTES Y VARIABLES GLOBALES ---
-    const ADMIN_PIN = "2580";
+    const ADMIN_PIN = "1234";
     const MAX_VALORES_CHECKBOXES = 3;
     let currentStep = 1;
     let countdownInterval;
@@ -134,6 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
         responseData.estilo = formData.getAll('estilo');
         responseData.valores = formData.getAll('valores');
         if (responseData.ocupacion !== 'otra') { responseData.ocupacion_otra = null; }
+        
         const { error } = await db.from('respuestas').insert([responseData]);
         if (error) {
             console.error('Error guardando en Supabase:', error);
@@ -148,95 +151,3 @@ document.addEventListener('DOMContentLoaded', () => {
                     to_name: responseData.nombre,
                     to_email: responseData.correo,
                     countdown_days: Math.floor(distance / (1000 * 60 * 60 * 24)),
-                    countdown_hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-                    countdown_minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
-                    raffle_date: raffleDate.toLocaleDateString('es-VE', { year: 'numeric', month: 'long', day: 'numeric' })
-                };
-                await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
-                console.log('Correo de confirmación enviado con éxito.');
-            } catch (emailError) {
-                console.error('Hubo un problema al enviar el correo de confirmación:', emailError);
-            }
-            surveyView.classList.add('hidden');
-            successView.classList.remove('hidden');
-            startCountdown();
-            window.scrollTo(0, 0);
-        }
-    });
-    
-    // --- LÓGICA DEL SORTEO Y ADMIN ---
-    const startCountdown = () => {
-        clearInterval(countdownInterval);
-        const raffleConfig = JSON.parse(localStorage.getItem('coqueta_raffle_config')) || {};
-        const raffleDate = raffleConfig.date ? new Date(raffleConfig.date) : new Date(new Date().getTime() + 10 * 24 * 60 * 60 * 1000);
-        if (!raffleConfig.date) localStorage.setItem('coqueta_raffle_config', JSON.stringify({ ...raffleConfig, date: raffleDate.toISOString() }));
-        countdownInterval = setInterval(() => {
-            const distance = raffleDate - new Date().getTime();
-            if (distance < 0) { clearInterval(countdownInterval); countdownElement.innerHTML = "¡El sorteo ha finalizado!"; return; }
-            const d = Math.floor(distance / (1000 * 60 * 60 * 24));
-            const h = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-            const s = Math.floor((distance % (1000 * 60)) / 1000);
-            countdownElement.innerHTML = `${d}d ${h}h ${m}m ${s}s`;
-        }, 1000);
-    };
-    window.saveRaffleConfig = () => {
-        const config = { date: raffleDateInput.value, couponValue: couponValueInput.value };
-        localStorage.setItem('coqueta_raffle_config', JSON.stringify(config));
-        alert('Configuración del sorteo guardada.');
-    };
-    pinInputs.forEach((input, index) => {
-        input.addEventListener('keyup', (e) => {
-            if (e.key >= 0 && e.key <= 9 && index < pinInputs.length - 1) { pinInputs[index + 1].focus(); }
-            if (e.key === 'Backspace' && index > 0) { pinInputs[index - 1].focus(); }
-        });
-    });
-    window.verifyAdminPin = () => {
-        if (Array.from(pinInputs).map(i => i.value).join('') === ADMIN_PIN) {
-            adminBtn.classList.add('hidden');
-            surveyView.classList.add('hidden'); successView.classList.add('hidden'); dashboardView.classList.remove('hidden');
-            surveyHearts.classList.add('hidden'); dashboardIcons.classList.remove('hidden');
-            renderDashboard(); closeAdminLogin(); window.scrollTo(0, 0);
-            pinInputs.forEach(input => input.value = '');
-        } else {
-            pinError.classList.remove('hidden'); pinInputs.forEach(input => input.value = ''); pinInputs[0].focus();
-        }
-    };
-    window.clearData = async () => { if (confirm('¿Estás seguro de que quieres borrar TODAS las respuestas de la nube? Esta acción no se puede deshacer.')) { const { error } = await db.from('respuestas').delete().neq('id', 0); if (error) console.error("Error borrando datos:", error); else renderDashboard();}};
-    window.updateDashboard = () => renderDashboard();
-    window.exportData = async () => {
-        const { data: responses, error } = await db.from('respuestas').select('*');
-        if (error || !responses || responses.length === 0) { alert("No hay datos para exportar."); return; }
-        const headers = Object.keys(responses[0]);
-        let csvContent = headers.join(',') + '\n';
-        responses.forEach(response => {
-            const row = headers.map(header => {
-                let cell = response[header] === null || response[header] === undefined ? '' : response[header];
-                if (Array.isArray(cell)) cell = cell.join('; ');
-                return `"${String(cell).replace(/"/g, '""')}"`;
-            }).join(',');
-            csvContent += row + '\n';
-        });
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'coqueta_responses.csv';
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-    window.sendReport = () => alert('Función no implementada. Esto simula el envío de un reporte por email.');
-    window.showAdminLogin = () => adminModal.classList.remove('hidden');
-    window.closeAdminLogin = () => adminModal.classList.add('hidden');
-    window.exitDashboard = () => {
-        dashboardView.classList.add('hidden'); surveyView.classList.remove('hidden');
-        adminBtn.classList.remove('hidden');
-        dashboardIcons.classList.add('hidden'); surveyHearts.classList.remove('hidden');
-    };
-    window.resetSurvey = () => {
-        form.reset(); currentStep = 1; showStep(1);
-        successView.classList.add('hidden'); surveyView.classList.remove('hidden');
-        dashboardIcons.classList.add('hidden'); surveyHearts.classList.remove('hidden');
-        clearInterval(countdownInterval);
-    };
-});

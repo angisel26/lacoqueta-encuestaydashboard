@@ -83,16 +83,17 @@ document.addEventListener('DOMContentLoaded', () => {
         let allValid = true;
 
         for (const input of inputs) {
+            // Para radio y checkbox, verifica que al menos uno en su grupo esté seleccionado
             if (input.type === 'radio' || input.type === 'checkbox') {
                 const name = input.name;
                 if (!form.querySelector(`input[name="${name}"]:checked`)) {
                     allValid = false;
-                    break;
+                    break; // Sal del bucle si encuentras un grupo no válido
                 }
-            } else {
+            } else { // Para otros inputs (text, email, tel)
                 if (!input.value.trim()) {
                     allValid = false;
-                    break;
+                    break; // Sal del bucle si encuentras un input vacío
                 }
             }
         }

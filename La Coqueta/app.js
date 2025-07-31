@@ -44,9 +44,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const count = responses.filter(filterFn).length;
             return `${Math.round((count / responses.length) * 100)}%`;
         };
-        document.getElementById('metric-asesoria').innerText = calcPercentage(r => r['asesoria-previa'] === 'no-encantaria');
+        document.getElementById('metric-asesoria').innerText = calcPercentage(r => r['asesoria_previa'] === 'no-encantaria');
         document.getElementById('metric-precio').innerText = calcPercentage(r => r.precio === '>60');
-        document.getElementById('metric-piloto').innerText = calcPercentage(r => r['participar-piloto'] === 'si');
+        document.getElementById('metric-piloto').innerText = calcPercentage(r => r['participar_piloto'] === 'si');
         renderAgeChart(responses);
         renderSeguridadChart(responses);
         renderValoresChart(responses);
@@ -133,6 +133,11 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 responseData[key] = value;
             }
+        }
+        
+        // Limpiar el campo 'ocupacion_otra' si no se seleccionó 'otra'
+        if(responseData.ocupacion !== 'otra') {
+            responseData.ocupacion_otra = null;
         }
 
         const { error } = await db.from('respuestas').insert([responseData]);

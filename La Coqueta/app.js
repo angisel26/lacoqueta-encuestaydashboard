@@ -3,11 +3,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const SUPABASE_URL = 'https://iijnuxziaftelvowmorg.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlpam51eHppYWZ0ZWx2b3dtb3JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5MDk2OTAsImV4cCI6MjA2OTQ4NTY5MH0.vlnPdApENWEx2-ayNTtGpEqu7DcPS6_VYHOK--cVi0o';
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    const EMAILJS_SERVICE_ID = 'service_56kl65g';
+    const EMAILJS_SERVICE_ID = 'service_sqsuzmb';
     const EMAILJS_TEMPLATE_ID = 'template_100rn4i';
 
     // --- CONSTANTES Y VARIABLES GLOBALES ---
-    const ADMIN_PIN = "1234";
+    const ADMIN_PIN = "2580";
     const MAX_VALORES_CHECKBOXES = 3;
     let currentStep = 1;
     let countdownInterval;

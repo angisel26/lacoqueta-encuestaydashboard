@@ -1,8 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- CONFIGURACIÓN DE SUPABASE ---
+    // --- CONFIGURACIÓN DE SERVICIOS ---
     const SUPABASE_URL = 'https://iijnuxziaftelvowmorg.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlpam51eHppYWZ0ZWx2b3dtb3JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5MDk2OTAsImV4cCI6MjA2OTQ4NTY5MH0.vlnPdApENWEx2-ayNTtGpEqu7DcPS6_VYHOK--cVi0o';
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const EMAILJS_SERVICE_ID = 'service_56kl65g';
+    const EMAILJS_TEMPLATE_ID = 'template_100rn4i';
 
     // --- CONSTANTES Y VARIABLES GLOBALES ---
     const ADMIN_PIN = "1234";
@@ -45,7 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const count = responses.filter(filterFn).length;
             return `${Math.round((count / responses.length) * 100)}%`;
         };
-        // CORRECCIÓN: Apuntar a la columna correcta 'asesoria_gratuita'
         document.getElementById('metric-asesoria').innerText = calcPercentage(r => r.asesoria_gratuita === 'si');
         document.getElementById('metric-precio').innerText = calcPercentage(r => r.precio === '>60');
         document.getElementById('metric-piloto').innerText = calcPercentage(r => r['participar_piloto'] === 'si');
@@ -87,16 +88,8 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const input of inputs) {
             if (input.type === 'radio' || input.type === 'checkbox') {
                 const name = input.name;
-                if (!form.querySelector(`input[name="${name}"]:checked`)) {
-                    allValid = false;
-                    break;
-                }
-            } else {
-                if (!input.value.trim()) {
-                    allValid = false;
-                    break;
-                }
-            }
+                if (!form.querySelector(`input[name="${name}"]:checked`)) { allValid = false; break; }
+            } else { if (!input.value.trim()) { allValid = false; break; } }
         }
         return allValid;
     };
@@ -112,36 +105,22 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     ocupacionRadios.forEach(radio => {
         radio.addEventListener('change', () => {
-            if (radio.value === 'otra' && radio.checked) {
-                otraOcupacionInput.classList.remove('hidden');
-                otraOcupacionInput.required = true;
-            } else {
-                otraOcupacionInput.classList.add('hidden');
-                otraOcupacionInput.required = false;
-            }
+            if (radio.value === 'otra' && radio.checked) { otraOcupacionInput.classList.remove('hidden'); otraOcupacionInput.required = true; } 
+            else { otraOcupacionInput.classList.add('hidden'); otraOcupacionInput.required = false; }
         });
     });
     valoresCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', () => {
             const checkedCount = document.querySelectorAll('input[name="valores"]:checked').length;
-            if (checkedCount >= MAX_VALORES_CHECKBOXES) {
-                valoresCheckboxes.forEach(cb => { if (!cb.checked) cb.disabled = true; });
-            } else {
-                valoresCheckboxes.forEach(cb => { cb.disabled = false; });
-            }
+            if (checkedCount >= MAX_VALORES_CHECKBOXES) { valoresCheckboxes.forEach(cb => { if (!cb.checked) cb.disabled = true; }); } 
+            else { valoresCheckboxes.forEach(cb => { cb.disabled = false; }); }
         });
     });
     nextButtons.forEach(button => {
         button.addEventListener('click', () => {
             if (validateStep(currentStep)) {
-                if (currentStep < totalSteps) {
-                    currentStep++;
-                    showStep(currentStep);
-                    window.scrollTo(0, 0);
-                }
-            } else {
-                alert('Por favor, completa todos los campos marcados con (*) para continuar.');
-            }
+                if (currentStep < totalSteps) { currentStep++; showStep(currentStep); window.scrollTo(0, 0); }
+            } else { alert('Por favor, completa todos los campos marcados con (*) para continuar.'); }
         });
     });
     prevButtons.forEach(button => button.addEventListener('click', () => { if (currentStep > 1) { currentStep--; showStep(currentStep); window.scrollTo(0, 0); }}));
@@ -149,20 +128,35 @@ document.addEventListener('DOMContentLoaded', () => {
     
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        if (!validateStep(currentStep)) {
-            alert('Por favor, completa todos los campos marcados con (*) para continuar.');
-            return;
-        }
+        if (!validateStep(currentStep)) { alert('Por favor, completa todos los campos marcados con (*) para continuar.'); return; }
         const formData = new FormData(form);
         const responseData = Object.fromEntries(formData.entries());
         responseData.estilo = formData.getAll('estilo');
         responseData.valores = formData.getAll('valores');
-        if(responseData.ocupacion !== 'otra') { responseData.ocupacion_otra = null; }
+        if (responseData.ocupacion !== 'otra') { responseData.ocupacion_otra = null; }
         const { error } = await db.from('respuestas').insert([responseData]);
         if (error) {
             console.error('Error guardando en Supabase:', error);
             alert('Hubo un error al guardar tu respuesta. Por favor, intenta de nuevo.');
         } else {
+            console.log('Respuesta guardada en Supabase con éxito.');
+            try {
+                const raffleConfig = JSON.parse(localStorage.getItem('coqueta_raffle_config')) || {};
+                const raffleDate = raffleConfig.date ? new Date(raffleConfig.date) : new Date(new Date().getTime() + 10 * 24 * 60 * 60 * 1000);
+                const distance = raffleDate - new Date().getTime();
+                const templateParams = {
+                    to_name: responseData.nombre,
+                    to_email: responseData.correo,
+                    countdown_days: Math.floor(distance / (1000 * 60 * 60 * 24)),
+                    countdown_hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+                    countdown_minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
+                    raffle_date: raffleDate.toLocaleDateString('es-VE', { year: 'numeric', month: 'long', day: 'numeric' })
+                };
+                await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
+                console.log('Correo de confirmación enviado con éxito.');
+            } catch (emailError) {
+                console.error('Hubo un problema al enviar el correo de confirmación:', emailError);
+            }
             surveyView.classList.add('hidden');
             successView.classList.remove('hidden');
             startCountdown();
@@ -191,26 +185,17 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('coqueta_raffle_config', JSON.stringify(config));
         alert('Configuración del sorteo guardada.');
     };
-    
-    // CORRECCIÓN: Lógica para el avance automático del PIN
     pinInputs.forEach((input, index) => {
         input.addEventListener('keyup', (e) => {
-            if (e.key >= 0 && e.key <= 9 && index < pinInputs.length - 1) {
-                pinInputs[index + 1].focus();
-            }
-            if (e.key === 'Backspace' && index > 0) {
-                pinInputs[index - 1].focus();
-            }
+            if (e.key >= 0 && e.key <= 9 && index < pinInputs.length - 1) { pinInputs[index + 1].focus(); }
+            if (e.key === 'Backspace' && index > 0) { pinInputs[index - 1].focus(); }
         });
     });
-
     window.verifyAdminPin = () => {
         if (Array.from(pinInputs).map(i => i.value).join('') === ADMIN_PIN) {
             adminBtn.classList.add('hidden');
             surveyView.classList.add('hidden'); successView.classList.add('hidden'); dashboardView.classList.remove('hidden');
-            // CORRECCIÓN: Gestionar visibilidad de emojis
-            surveyHearts.classList.add('hidden');
-            dashboardIcons.classList.remove('hidden');
+            surveyHearts.classList.add('hidden'); dashboardIcons.classList.remove('hidden');
             renderDashboard(); closeAdminLogin(); window.scrollTo(0, 0);
             pinInputs.forEach(input => input.value = '');
         } else {
@@ -244,22 +229,14 @@ document.addEventListener('DOMContentLoaded', () => {
     window.showAdminLogin = () => adminModal.classList.remove('hidden');
     window.closeAdminLogin = () => adminModal.classList.add('hidden');
     window.exitDashboard = () => {
-        dashboardView.classList.add('hidden');
-        surveyView.classList.remove('hidden');
+        dashboardView.classList.add('hidden'); surveyView.classList.remove('hidden');
         adminBtn.classList.remove('hidden');
-        // CORRECCIÓN: Gestionar visibilidad de emojis
-        dashboardIcons.classList.add('hidden');
-        surveyHearts.classList.remove('hidden');
+        dashboardIcons.classList.add('hidden'); surveyHearts.classList.remove('hidden');
     };
     window.resetSurvey = () => {
-        form.reset();
-        currentStep = 1;
-        showStep(1);
-        successView.classList.add('hidden');
-        surveyView.classList.remove('hidden');
-        // CORRECCIÓN: Gestionar visibilidad de emojis
-        dashboardIcons.classList.add('hidden');
-        surveyHearts.classList.remove('hidden');
+        form.reset(); currentStep = 1; showStep(1);
+        successView.classList.add('hidden'); surveyView.classList.remove('hidden');
+        dashboardIcons.classList.add('hidden'); surveyHearts.classList.remove('hidden');
         clearInterval(countdownInterval);
     };
 });

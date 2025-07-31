@@ -61,37 +61,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderAgeChart = (responses) => {
         const counts = responses.reduce((acc, r) => { acc[r.edad] = (acc[r.edad] || 0) + 1; return acc; }, {});
-        renderChart('age-chart', 'doughnut', {
-            labels: Object.keys(counts),
-            datasets: [{ data: Object.values(counts), backgroundColor: ['#ec4899', '#be185d', '#a21caf', '#7c3aed', '#5b21b6'], hoverOffset: 4 }]
-        }, { responsive: true, plugins: { legend: { position: 'bottom' } } });
+        renderChart('age-chart', 'doughnut', { labels: Object.keys(counts), datasets: [{ data: Object.values(counts), backgroundColor: ['#ec4899', '#be185d', '#a21caf', '#7c3aed', '#5b21b6'], hoverOffset: 4 }] }, { responsive: true, plugins: { legend: { position: 'bottom' } } });
     };
     
     const renderSeguridadChart = (responses) => {
         const labels = { 'si': 'Sí, segura', 'mas-menos': 'Más o menos', 'no': 'No, me cuesta' };
         const counts = responses.reduce((acc, r) => { const label = labels[r.seguridad] || 'No responde'; acc[label] = (acc[label] || 0) + 1; return acc; }, {});
-        renderChart('seguridad-chart', 'bar', {
-            labels: Object.keys(counts),
-            datasets: [{ data: Object.values(counts), backgroundColor: ['#10b981', '#f59e0b', '#ef4444'], borderRadius: 8 }]
-        }, { responsive: true, plugins: { legend: { display: false } } });
+        renderChart('seguridad-chart', 'bar', { labels: Object.keys(counts), datasets: [{ data: Object.values(counts), backgroundColor: ['#10b981', '#f59e0b', '#ef4444'], borderRadius: 8 }] }, { responsive: true, plugins: { legend: { display: false } } });
     };
 
     const renderValoresChart = (responses) => {
         const labels = { "quede-bien": "Quede bien", "resalte-figura": "Resalte figura", "calidad": "Calidad", "moda": "Moda", "asesoren": "Asesoría", "combine": "Combine", "sentir-segura": "Sentir segura", "servicio-personalizado": "Servicio personalizado" };
         const counts = (responses.flatMap(r => r.valores).filter(Boolean)).reduce((acc, v) => { const label = labels[v] || v; acc[label] = (acc[label] || 0) + 1; return acc; }, {});
-        renderChart('valores-chart', 'bar', {
-            labels: Object.keys(counts),
-            datasets: [{ data: Object.values(counts), backgroundColor: ['#ec4899', '#be185d', '#a21caf', '#7c3aed', '#5b21b6', '#ec4899', '#be185d', '#a21caf'], borderRadius: 6 }]
-        }, { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } });
+        renderChart('valores-chart', 'bar', { labels: Object.keys(counts), datasets: [{ data: Object.values(counts), backgroundColor: ['#ec4899', '#be185d', '#a21caf', '#7c3aed', '#5b21b6', '#ec4899', '#be185d', '#a21caf'], borderRadius: 6 }] }, { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } });
     };
 
     const renderMarcasChart = (responses) => {
         const labels = { 'nacional': 'Nacionales', 'importada': 'Importadas' };
         const counts = responses.reduce((acc, r) => { const label = labels[r.marcas] || 'No responde'; acc[label] = (acc[label] || 0) + 1; return acc; }, {});
-        renderChart('marcas-chart', 'doughnut', {
-            labels: Object.keys(counts),
-            datasets: [{ data: Object.values(counts), backgroundColor: ['#ec4899', '#7c3aed'], hoverOffset: 4 }]
-        }, { responsive: true, plugins: { legend: { position: 'bottom' } } });
+        renderChart('marcas-chart', 'doughnut', { labels: Object.keys(counts), datasets: [{ data: Object.values(counts), backgroundColor: ['#ec4899', '#7c3aed'], hoverOffset: 4 }] }, { responsive: true, plugins: { legend: { position: 'bottom' } } });
     };
 
     // --- LÓGICA DE NAVEGACIÓN Y FORMULARIO ---
@@ -118,6 +106,23 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // --- INICIO DE LA LÓGICA CORREGIDA PARA CHECKBOXES "VALORES" ---
+    valoresCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', () => {
+            const checkedCount = document.querySelectorAll('input[name="valores"]:checked').length;
+            if (checkedCount >= MAX_VALORES_CHECKBOXES) {
+                valoresCheckboxes.forEach(cb => {
+                    if (!cb.checked) cb.disabled = true;
+                });
+            } else {
+                valoresCheckboxes.forEach(cb => {
+                    cb.disabled = false;
+                });
+            }
+        });
+    });
+    // --- FIN DE LA LÓGICA CORREGIDA ---
+
     nextButtons.forEach(button => button.addEventListener('click', () => { if (currentStep < totalSteps) { currentStep++; showStep(currentStep); window.scrollTo(0, 0); }}));
     prevButtons.forEach(button => button.addEventListener('click', () => { if (currentStep > 1) { currentStep--; showStep(currentStep); window.scrollTo(0, 0); }}));
     showStep(currentStep);
@@ -125,20 +130,20 @@ document.addEventListener('DOMContentLoaded', () => {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(form);
-        
-        // --- INICIO DE LA CORRECCIÓN ---
-        // Convertimos el formData a un objeto simple, pero esto solo captura la primera opción de cada checkbox.
-        const responseData = Object.fromEntries(formData.entries());
 
-        // AHORA, sobreescribimos las claves que deben ser arrays usando .getAll()
-        // Esto asegura que sean un array, incluso si solo hay una opción seleccionada.
+        // --- INICIO DE LA VALIDACIÓN CON FEEDBACK ---
+        const valoresSeleccionados = formData.getAll('valores').length;
+        if (valoresSeleccionados === 0) {
+            alert('Por favor, selecciona al menos una opción en la pregunta "¿Qué es lo que más valoras?" para continuar.');
+            return; // Detiene el envío del formulario
+        }
+        // --- FIN DE LA VALIDACIÓN ---
+        
+        const responseData = Object.fromEntries(formData.entries());
         responseData.estilo = formData.getAll('estilo');
         responseData.valores = formData.getAll('valores');
-        // --- FIN DE LA CORRECCIÓN ---
         
-        if(responseData.ocupacion !== 'otra') {
-            responseData.ocupacion_otra = null;
-        }
+        if(responseData.ocupacion !== 'otra') { responseData.ocupacion_otra = null; }
 
         const { error } = await db.from('respuestas').insert([responseData]);
         if (error) {

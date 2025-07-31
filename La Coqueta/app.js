@@ -32,6 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const couponValueInput = document.getElementById('coupon-value');
     const ocupacionRadios = document.querySelectorAll('input[name="ocupacion"]');
     const otraOcupacionInput = document.getElementById('ocupacion-otra-input');
+    const surveyHearts = document.getElementById('survey-hearts');
+    const dashboardIcons = document.getElementById('dashboard-icons');
 
     // --- LÓGICA DEL DASHBOARD ---
     const renderDashboard = async () => {
@@ -43,7 +45,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const count = responses.filter(filterFn).length;
             return `${Math.round((count / responses.length) * 100)}%`;
         };
-        document.getElementById('metric-asesoria').innerText = calcPercentage(r => r['asesoria_previa'] === 'no-encantaria');
+        // CORRECCIÓN: Apuntar a la columna correcta 'asesoria_gratuita'
+        document.getElementById('metric-asesoria').innerText = calcPercentage(r => r.asesoria_gratuita === 'si');
         document.getElementById('metric-precio').innerText = calcPercentage(r => r.precio === '>60');
         document.getElementById('metric-piloto').innerText = calcPercentage(r => r['participar_piloto'] === 'si');
         renderAgeChart(responses);
@@ -81,25 +84,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentSection = document.querySelector(`.survey-section[data-step="${stepNumber}"]`);
         const inputs = currentSection.querySelectorAll('input[required], select[required], textarea[required]');
         let allValid = true;
-
         for (const input of inputs) {
-            // Para radio y checkbox, verifica que al menos uno en su grupo esté seleccionado
             if (input.type === 'radio' || input.type === 'checkbox') {
                 const name = input.name;
                 if (!form.querySelector(`input[name="${name}"]:checked`)) {
                     allValid = false;
-                    break; // Sal del bucle si encuentras un grupo no válido
+                    break;
                 }
-            } else { // Para otros inputs (text, email, tel)
+            } else {
                 if (!input.value.trim()) {
                     allValid = false;
-                    break; // Sal del bucle si encuentras un input vacío
+                    break;
                 }
             }
         }
         return allValid;
     };
-
     const showStep = (step) => {
         surveySections.forEach(section => section.classList.add('hidden'));
         document.querySelector(`.survey-section[data-step="${step}"]`)?.classList.remove('hidden');
@@ -110,7 +110,6 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.style.width = `${progress}%`;
         progressText.innerText = `${progress}%`;
     };
-    
     ocupacionRadios.forEach(radio => {
         radio.addEventListener('change', () => {
             if (radio.value === 'otra' && radio.checked) {
@@ -122,7 +121,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
-
     valoresCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', () => {
             const checkedCount = document.querySelectorAll('input[name="valores"]:checked').length;
@@ -133,7 +131,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
-
     nextButtons.forEach(button => {
         button.addEventListener('click', () => {
             if (validateStep(currentStep)) {
@@ -147,7 +144,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
-
     prevButtons.forEach(button => button.addEventListener('click', () => { if (currentStep > 1) { currentStep--; showStep(currentStep); window.scrollTo(0, 0); }}));
     showStep(currentStep);
     
@@ -157,13 +153,11 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Por favor, completa todos los campos marcados con (*) para continuar.');
             return;
         }
-
         const formData = new FormData(form);
         const responseData = Object.fromEntries(formData.entries());
         responseData.estilo = formData.getAll('estilo');
         responseData.valores = formData.getAll('valores');
         if(responseData.ocupacion !== 'otra') { responseData.ocupacion_otra = null; }
-
         const { error } = await db.from('respuestas').insert([responseData]);
         if (error) {
             console.error('Error guardando en Supabase:', error);
@@ -176,7 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // --- LÓGICA DEL SORTEO, ADMIN Y ACCIONES RÁPIDAS (sin cambios) ---
+    // --- LÓGICA DEL SORTEO Y ADMIN ---
     const startCountdown = () => {
         clearInterval(countdownInterval);
         const raffleConfig = JSON.parse(localStorage.getItem('coqueta_raffle_config')) || {};
@@ -197,10 +191,26 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('coqueta_raffle_config', JSON.stringify(config));
         alert('Configuración del sorteo guardada.');
     };
+    
+    // CORRECCIÓN: Lógica para el avance automático del PIN
+    pinInputs.forEach((input, index) => {
+        input.addEventListener('keyup', (e) => {
+            if (e.key >= 0 && e.key <= 9 && index < pinInputs.length - 1) {
+                pinInputs[index + 1].focus();
+            }
+            if (e.key === 'Backspace' && index > 0) {
+                pinInputs[index - 1].focus();
+            }
+        });
+    });
+
     window.verifyAdminPin = () => {
         if (Array.from(pinInputs).map(i => i.value).join('') === ADMIN_PIN) {
             adminBtn.classList.add('hidden');
             surveyView.classList.add('hidden'); successView.classList.add('hidden'); dashboardView.classList.remove('hidden');
+            // CORRECCIÓN: Gestionar visibilidad de emojis
+            surveyHearts.classList.add('hidden');
+            dashboardIcons.classList.remove('hidden');
             renderDashboard(); closeAdminLogin(); window.scrollTo(0, 0);
             pinInputs.forEach(input => input.value = '');
         } else {
@@ -233,6 +243,23 @@ document.addEventListener('DOMContentLoaded', () => {
     window.sendReport = () => alert('Función no implementada. Esto simula el envío de un reporte por email.');
     window.showAdminLogin = () => adminModal.classList.remove('hidden');
     window.closeAdminLogin = () => adminModal.classList.add('hidden');
-    window.exitDashboard = () => { dashboardView.classList.add('hidden'); surveyView.classList.remove('hidden'); adminBtn.classList.remove('hidden'); };
-    window.resetSurvey = () => { form.reset(); currentStep = 1; showStep(1); successView.classList.add('hidden'); surveyView.classList.remove('hidden'); clearInterval(countdownInterval); };
+    window.exitDashboard = () => {
+        dashboardView.classList.add('hidden');
+        surveyView.classList.remove('hidden');
+        adminBtn.classList.remove('hidden');
+        // CORRECCIÓN: Gestionar visibilidad de emojis
+        dashboardIcons.classList.add('hidden');
+        surveyHearts.classList.remove('hidden');
+    };
+    window.resetSurvey = () => {
+        form.reset();
+        currentStep = 1;
+        showStep(1);
+        successView.classList.add('hidden');
+        surveyView.classList.remove('hidden');
+        // CORRECCIÓN: Gestionar visibilidad de emojis
+        dashboardIcons.classList.add('hidden');
+        surveyHearts.classList.remove('hidden');
+        clearInterval(countdownInterval);
+    };
 });

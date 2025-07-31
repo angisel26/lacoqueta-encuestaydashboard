@@ -125,17 +125,17 @@ document.addEventListener('DOMContentLoaded', () => {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(form);
-        const responseData = {};
-        for (let [key, value] of formData.entries()) {
-             if (responseData[key]) {
-                if (!Array.isArray(responseData[key])) responseData[key] = [responseData[key]];
-                responseData[key].push(value);
-            } else {
-                responseData[key] = value;
-            }
-        }
         
-        // Limpiar el campo 'ocupacion_otra' si no se seleccionó 'otra'
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Convertimos el formData a un objeto simple, pero esto solo captura la primera opción de cada checkbox.
+        const responseData = Object.fromEntries(formData.entries());
+
+        // AHORA, sobreescribimos las claves que deben ser arrays usando .getAll()
+        // Esto asegura que sean un array, incluso si solo hay una opción seleccionada.
+        responseData.estilo = formData.getAll('estilo');
+        responseData.valores = formData.getAll('valores');
+        // --- FIN DE LA CORRECCIÓN ---
+        
         if(responseData.ocupacion !== 'otra') {
             responseData.ocupacion_otra = null;
         }

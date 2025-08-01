@@ -52,16 +52,26 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('metric-asesoria').innerText = calcPercentage(r => r.asesoria_gratuita === 'si');
         document.getElementById('metric-precio').innerText = calcPercentage(r => r.precio === '>60');
         document.getElementById('metric-piloto').innerText = calcPercentage(r => r['participar_piloto'] === 'si');
+        
+        // Gráficos existentes
         renderAgeChart(responses);
         renderSeguridadChart(responses);
         renderValoresChart(responses);
         renderMarcasChart(responses);
+
+        // --- INICIO: Llamadas a las nuevas funciones de gráficos ---
+        renderEstiloChart(responses);
+        renderPrecioChart(responses);
+        // --- FIN: Llamadas a las nuevas funciones de gráficos ---
     };
+
     const renderChart = (chartId, type, data, options) => {
         if (chartInstances[chartId]) chartInstances[chartId].destroy();
         const ctx = document.getElementById(chartId)?.getContext('2d');
         if (ctx) chartInstances[chartId] = new Chart(ctx, { type, data, options });
     };
+    
+    // Gráficos existentes (sin cambios)
     const renderAgeChart = (responses) => {
         const counts = responses.reduce((acc, r) => { acc[r.edad] = (acc[r.edad] || 0) + 1; return acc; }, {});
         renderChart('age-chart', 'doughnut', { labels: Object.keys(counts), datasets: [{ data: Object.values(counts), backgroundColor: ['#ec4899', '#be185d', '#a21caf', '#7c3aed', '#5b21b6'], hoverOffset: 4 }] }, { responsive: true, plugins: { legend: { position: 'bottom' } } });
@@ -82,7 +92,57 @@ document.addEventListener('DOMContentLoaded', () => {
         renderChart('marcas-chart', 'doughnut', { labels: Object.keys(counts), datasets: [{ data: Object.values(counts), backgroundColor: ['#ec4899', '#7c3aed'], hoverOffset: 4 }] }, { responsive: true, plugins: { legend: { position: 'bottom' } } });
     };
 
-    // --- LÓGICA DE NAVEGACIÓN Y VALIDACIÓN ---
+    // --- INICIO: Nuevas funciones para gráficos ---
+
+    // Requerimiento #1: Gráfico de "Preferencia de Estilo"
+    const renderEstiloChart = (responses) => {
+        const labels = { "clasico": "Clásico", "minimalista": "Minimalista", "creativo": "Creativo", "casual": "Casual", "deportivo": "Deportivo", "no-segura": "No estoy segura" };
+        const counts = (responses.flatMap(r => r.estilo).filter(Boolean)).reduce((acc, v) => {
+            const label = labels[v] || v;
+            acc[label] = (acc[label] || 0) + 1;
+            return acc;
+        }, {});
+
+        renderChart('estilo-chart', 'bar', {
+            labels: Object.keys(counts),
+            datasets: [{
+                data: Object.values(counts),
+                backgroundColor: ['#ec4899', '#be185d', '#a21caf', '#7c3aed', '#5b21b6', '#f472b6'],
+                borderRadius: 6
+            }]
+        }, {
+            indexAxis: 'y', // <-- Esto lo convierte en Barras Horizontales
+            responsive: true,
+            plugins: { legend: { display: false } }
+        });
+    };
+
+    // Requerimiento #2: Gráfico de "Disposición a Pagar"
+    const renderPrecioChart = (responses) => {
+        const labels = { '<30': 'Hasta $30', '30-60': '$31 - $60', '>60': 'Más de $60' };
+        const counts = responses.reduce((acc, r) => {
+            const label = labels[r.precio] || 'No responde';
+            acc[label] = (acc[label] || 0) + 1;
+            return acc;
+        }, {});
+
+        renderChart('precio-chart', 'bar', {
+            labels: Object.keys(counts),
+            datasets: [{
+                label: 'Número de Usuarias',
+                data: Object.values(counts),
+                backgroundColor: ['#ec4899', '#be185d', '#a21caf'],
+                borderRadius: 8
+            }]
+        }, {
+            responsive: true,
+            plugins: { legend: { display: false } }
+        });
+    };
+    // --- FIN: Nuevas funciones para gráficos ---
+
+
+    // --- LÓGICA DE NAVEGACIÓN Y FORMULARIO (sin cambios) ---
     const validateStep = (stepNumber) => {
         const currentSection = document.querySelector(`.survey-section[data-step="${stepNumber}"]`);
         const inputs = currentSection.querySelectorAll('input[required], select[required], textarea[required]');
@@ -168,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // --- LÓGICA DEL SORTEO Y ADMIN ---
+    // --- LÓGICA DEL SORTEO, ADMIN Y ACCIONES RÁPIDAS (sin cambios) ---
     const startCountdown = () => {
         clearInterval(countdownInterval);
         const raffleConfig = JSON.parse(localStorage.getItem('coqueta_raffle_config')) || {};
